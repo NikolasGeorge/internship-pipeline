@@ -1,0 +1,77 @@
+{
+  "_comment": "Copy to resume_data.json and fill in. Bullet text must be VERBATIM from your real resume; tailor.py only selects and reorders, it never rewrites.",
+  "name": "Your Name",
+  "contact": {
+    "location": "City, ST",
+    "phone": "+1 (555) 555-0100",
+    "email": "you@example.com",
+    "linkedin": "linkedin.com/in/you"
+  },
+  "education": [
+    {
+      "school": "Your University",
+      "location": "City, ST",
+      "degree": "Bachelor of Science in Computer Science",
+      "gpa": "3.90",
+      "date": "May 2027",
+      "coursework": "Data Structures and Algorithms, Databases",
+      "in_progress": "Distributed Systems",
+      "honors": "Dean's List"
+    }
+  ],
+  "experience": [
+    {
+      "org": "Example Corp",
+      "location": "City, ST",
+      "role": "Software Engineering Intern",
+      "date": "June 2026 - August 2026",
+      "always_include": true,
+      "bullets": [
+        {
+          "text": "Shipped a thing that did a measurable amount of another thing",
+          "tags": [
+            "backend",
+            "api"
+          ]
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Example Project",
+      "location": "Remote",
+      "role": "Solo",
+      "date": "2025 - Present",
+      "tags": [
+        "python",
+        "api"
+      ],
+      "bullets": [
+        {
+          "text": "Built and maintain a tool that does something specific",
+          "tags": [
+            "python",
+            "api"
+          ]
+        }
+      ]
+    }
+  ],
+  "skills": {
+    "languages": [
+      "Python",
+      "Java",
+      "C++"
+    ],
+    "tools": [
+      "Git",
+      "Docker"
+    ],
+    "concepts": [
+      "REST APIs",
+      "Agile",
+      "SDLC"
+    ]
+  }
+}

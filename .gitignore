@@ -1,0 +1,25 @@
+# Whitelist, not a blocklist.
+#
+# This directory is a live job search: it holds resume content, application
+# history, fetched job descriptions, and generated documents. Enumerating
+# those to exclude them means one new file type is one accidental commit away.
+# So: ignore everything, then allow the tool itself.
+
+*
+
+# --- the tool ---
+!.gitignore
+!README.md
+!watch.py
+!enrich.py
+!tailor.py
+!applied.py
+!open_apps.py
+!run_watch.bat
+
+# --- reference data ---
+!faang_plus.json
+
+# --- templates (copy these, then fill them in) ---
+!config.example.json
+!resume_data.example.json

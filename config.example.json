@@ -1,0 +1,37 @@
+{
+  "locations": [
+    "remote",
+    "usa",
+    "united states",
+    ", ca",
+    ", ny",
+    ", tx",
+    ", wa",
+    ", va"
+  ],
+  "max_age_days": 21,
+  "title_keywords": [
+    "software",
+    "swe",
+    "backend",
+    "back-end",
+    "full stack",
+    "full-stack",
+    "frontend",
+    "front-end",
+    "systems engineer",
+    "platform engineer",
+    "site reliability",
+    "infrastructure",
+    "devops"
+  ],
+  "categories": [
+    "Software",
+    "Software Engineering"
+  ],
+  "terms_allow": [
+    "Summer 2027",
+    "N/A"
+  ],
+  "discord_webhook": ""
+}
