@@ -109,8 +109,9 @@ def matches_terms(terms, allowed):
 
 
 def score_posting(posting):
-    """Simple heuristic score. Higher = better realistic fit for this candidate
-    (defense/gov/mid-size where a Secret-clearance NAVSEA internship stands out)."""
+    """Heuristic fit score. Weighted toward defense/gov and mid-size employers,
+    where a security-clearance background differentiates a candidate instead of
+    being one line among thousands of similar resumes. Adjust to taste."""
     score = 0
     title = posting.get("title", "").lower()
     company = posting.get("company_name", "").lower()
