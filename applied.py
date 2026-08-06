@@ -108,7 +108,7 @@ def main():
             print("Nothing pending -- every APPLY posting has been submitted.")
             return
         print(f"{len(left)} APPLY posting(s) not yet submitted:\n")
-        for k, v in sorted(left.items()):
+        for _, v in sorted(left.items()):
             print(f"  {v.get('company')} — {v.get('title')}")
             print(f"    py tailor.py --stage {(v.get('company') or '').split()[0].lower()}")
         return

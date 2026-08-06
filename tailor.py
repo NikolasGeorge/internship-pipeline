@@ -38,6 +38,14 @@ STAGE_DIR = os.path.join(BASE_DIR, "tailored")
 OUT_DIR = os.path.join(STAGE_DIR, "Storage")
 DATA_PATH = os.path.join(BASE_DIR, "resume_data.json")
 
+# Keeps the generated resume to a single page.
+MAX_PROJECTS = 4
+
+# One accent colour, used only on the name and section headings. Resumes that
+# colour body text read as decorated; one restrained accent reads as designed.
+# Deep maroon matches the original resume. Navy 1F3864 is the other safe pick.
+ACCENT = RGBColor(0x8B, 0x1A, 0x1A)
+
 # Words that carry no signal for matching.
 STOP = set("""a an the and or of to in for with on at by as is are be been will
 would can could should must have has had you your we our they their this that
@@ -61,6 +69,27 @@ def desc_from_brief(path):
     txt = open(path, encoding="utf-8").read()
     m = re.search(r"^## Full description\s*$(.*)", txt, re.S | re.M)
     return (m.group(1) if m else txt).lower()
+
+
+def quota_blocked_brief(path):
+    """True if this posting's employer has no applications left.
+
+    Without this, --all-apply keeps regenerating resumes for companies whose
+    application allowance is spent -- 36 files for TikTok/ByteDance alone.
+    """
+    from datetime import date
+    try:
+        cfg = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
+    except Exception:
+        return False
+    company = os.path.basename(path).split("-")[0].lower()
+    today = date.today().isoformat()
+    for rule in cfg.get("quota_exhausted", []):
+        if rule.get("until") and rule["until"] < today:
+            continue
+        if any(m.lower() in company for m in rule.get("match", [])):
+            return True
+    return False
 
 
 def verdict_from_brief(path):
@@ -122,20 +151,21 @@ def _tabbed(doc, left, right, bold_left=True, italic_left=False):
 
 def _heading(doc, text):
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(8)
+    p.paragraph_format.space_before = Pt(5)
     p.paragraph_format.space_after = Pt(2)
     r = p.add_run(text.upper())
     r.bold = True
     r.font.size = Pt(11)
+    r.font.color.rgb = ACCENT
     pr = p._p.get_or_add_pPr()
-    from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
     bdr = OxmlElement("w:pBdr")
     bottom = OxmlElement("w:bottom")
     bottom.set(qn("w:val"), "single")
     bottom.set(qn("w:sz"), "6")
     bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "000000")
+    bottom.set(qn("w:color"), "8B1A1A")
     bdr.append(bottom)
     pr.append(bdr)
     return p
@@ -165,12 +195,17 @@ def build_docx(data, projects, skills, out_path, max_projects=None):
     r = h.add_run(data["name"])
     r.bold = True
     r.font.size = Pt(20)
+    r.font.color.rgb = ACCENT
 
     c = data["contact"]
     sub = doc.add_paragraph()
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     sub.paragraph_format.space_after = Pt(4)
-    sub.add_run(" • ".join([c["location"], c["phone"], c["email"], c["linkedin"]])).font.size = Pt(9)
+    # Build from whatever keys exist so adding a contact field doesn't need a
+    # code change -- the website was silently absent because it was hardcoded.
+    bits = [c[k] for k in ("location", "phone", "email", "website", "github", "linkedin")
+            if c.get(k)]
+    sub.add_run(" • ".join(bits)).font.size = Pt(9)
 
     # education
     _heading(doc, "Education")
@@ -219,9 +254,32 @@ def build_docx(data, projects, skills, out_path, max_projects=None):
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(0)
     p.add_run("Technical: ").bold = True
-    p.add_run("; ".join([", ".join(skills["languages"]),
-                         ", ".join(skills["tools"]),
-                         ", ".join(skills["concepts"])])).font.size = Pt(9)
+    parts = [", ".join(skills["languages"])]
+    # "Familiar" is a separate tier on purpose: it keeps breadth on the page
+    # without implying the same depth as the primary languages.
+    if skills.get("familiar"):
+        parts.append("Familiar: " + ", ".join(skills["familiar"]))
+    parts += [", ".join(skills["tools"]), ", ".join(skills["concepts"])]
+    p.add_run("; ".join(parts)).font.size = Pt(9)
+
+    # Affiliations ride under Skills rather than getting their own heading --
+    # a section header costs more vertical space than the content is worth,
+    # and the resume has to stay on one page.
+    if data.get("affiliations"):
+        # Right-align the date the same way Education/Experience/Projects do,
+        # so the line reads as part of the document rather than an afterthought.
+        for a in data["affiliations"]:
+            q = doc.add_paragraph()
+            q.paragraph_format.space_after = Pt(0)
+            q.paragraph_format.tab_stops.add_tab_stop(
+                Inches(7.0), WD_TAB_ALIGNMENT.RIGHT)
+            q.add_run("Affiliations: ").bold = True
+            q.add_run(a["name"]).font.size = Pt(9)
+            # Date is optional and usually omitted: a membership is a current
+            # state, not something with a duration, and dating a brand-new one
+            # just advertises how new it is.
+            if a.get("date"):
+                q.add_run("	" + a["date"]).font.size = Pt(9)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     doc.save(out_path)
@@ -243,7 +301,16 @@ def tailor_one(brief_path, data, quiet=False, force=False):
     company, title = company_title(brief_path)
     projects, scores = order_projects(data, desc)
     skills = order_skills(data, desc)
-    build_docx(data, projects, skills, out)
+    try:
+        # A second page on an intern resume is a cost, not a bonus: recruiters
+        # skim page one. Five projects overflow, so cap the list and let the
+        # relevance ordering decide which one is least worth the space.
+        build_docx(data, projects, skills, out, max_projects=MAX_PROJECTS)
+    except PermissionError:
+        # Word holds an exclusive lock on an open .docx. Skip it and keep
+        # going rather than aborting the whole batch partway through.
+        print(f"  [locked] {os.path.basename(out)} -- open in Word, skipped")
+        return None
 
     if not quiet:
         print(f"\n{company} — {title}")
@@ -298,7 +365,8 @@ def stage(pattern):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brief")
-    ap.add_argument("--all-apply", action="store_true")
+    ap.add_argument("--all-apply", action="store_true",
+                    help="build resumes for APPLY and REVIEW briefs")
     ap.add_argument("--stage", metavar="PATTERN",
                     help="clear tailored/ and stage the one Storage resume matching PATTERN "
                          "(e.g. --stage appian)")
@@ -333,7 +401,12 @@ def main():
         targets = [os.path.join(BRIEFS_DIR, f)
                    for f in sorted(os.listdir(BRIEFS_DIR))
                    if f.endswith(".md")]
-        targets = [t for t in targets if verdict_from_brief(t) == "APPLY"]
+        # REVIEW is included on purpose. A REVIEW verdict means "read the flags
+        # first", not "don't apply" -- the strongest RTX posting is REVIEW
+        # because of a boilerplate degree line. Only SKIP is genuinely dead.
+        targets = [t for t in targets
+                   if verdict_from_brief(t) in ("APPLY", "REVIEW")
+                   and not quota_blocked_brief(t)]
     else:
         ap.error("pass --brief <path> or --all-apply")
 

@@ -20,7 +20,6 @@ import argparse
 import json
 import os
 import re
-import sys
 import webbrowser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -49,6 +48,19 @@ def resume_prefix():
     except Exception:
         name = "Resume"
     return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_") or "Resume"
+
+
+def quota_blocked_company(company):
+    """Don't open tabs for employers whose application allowance is spent."""
+    from datetime import date
+    cfg = load(os.path.join(BASE_DIR, "config.json"), {})
+    today = date.today().isoformat()
+    for rule in cfg.get("quota_exhausted", []):
+        if rule.get("until") and rule["until"] < today:
+            continue
+        if any(m.lower() in (company or "").lower() for m in rule.get("match", [])):
+            return True
+    return False
 
 
 def apply_url(brief_name):
@@ -107,6 +119,8 @@ def main():
             continue
         if args.new_only and brief in opened:
             continue
+        if quota_blocked_company(v.get("company")):
+            continue
         url = apply_url(brief)
         if url:
             queue.append((v.get("company"), v.get("title"), url, brief))
@@ -136,7 +150,7 @@ def main():
             print(f"\n  Staged resume: {os.path.basename(staged)}")
     elif len(batch) > 1:
         print(f"\n  {len(batch)} tabs open, so no resume staged — the picker can't")
-        print(f"  tell them apart. Stage per application:  py tailor.py --stage <company>")
+        print("  tell them apart. Stage per application:  py tailor.py --stage <company>")
 
     if not args.dry_run:
         with open(OPENED_PATH, "w", encoding="utf-8") as f:

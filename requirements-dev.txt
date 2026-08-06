@@ -1,0 +1,4 @@
+# Development and CI only. The pipeline itself runs on the standard library;
+# python-docx is needed by tailor.py alone, and pytest by the test suite.
+pytest>=8.0
+python-docx>=1.1
