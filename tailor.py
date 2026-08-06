@@ -286,7 +286,7 @@ def build_docx(data, projects, skills, out_path, max_projects=None):
     return out_path
 
 
-def tailor_one(brief_path, data, quiet=False, force=False):
+def tailor_one(brief_path, data, quiet=False, force=False, max_projects=None):
     stem = os.path.splitext(os.path.basename(brief_path))[0]
     out = os.path.join(OUT_DIR, f"{resume_prefix()}_{stem}.docx")
 
@@ -305,7 +305,13 @@ def tailor_one(brief_path, data, quiet=False, force=False):
         # A second page on an intern resume is a cost, not a bonus: recruiters
         # skim page one. Five projects overflow, so cap the list and let the
         # relevance ordering decide which one is least worth the space.
-        build_docx(data, projects, skills, out, max_projects=MAX_PROJECTS)
+        #
+        # Four is right for most postings, but the cap is content-blind: it
+        # counts projects, not lines. A posting whose fourth-ranked project
+        # happens to carry two bullets instead of one can still spill onto a
+        # second page, so the limit is overridable per posting.
+        build_docx(data, projects, skills, out,
+                   max_projects=max_projects or MAX_PROJECTS)
     except PermissionError:
         # Word holds an exclusive lock on an open .docx. Skip it and keep
         # going rather than aborting the whole batch partway through.
@@ -373,6 +379,9 @@ def main():
     ap.add_argument("--list", action="store_true", help="list resumes in Storage")
     ap.add_argument("--quiet", action="store_true",
                     help="only report what was newly built (for scheduled runs)")
+    ap.add_argument("--max-projects", type=int, metavar="N",
+                    help=f"projects to keep on the page (default {MAX_PROJECTS}); "
+                         "lower it when a build spills onto a second page")
     ap.add_argument("--force", action="store_true",
                     help="rebuild even if the .docx already exists")
     args = ap.parse_args()
@@ -418,7 +427,8 @@ def main():
     for t in targets:
         stem = os.path.splitext(os.path.basename(t))[0]
         existed = os.path.exists(os.path.join(OUT_DIR, f"{resume_prefix()}_{stem}.docx"))
-        tailor_one(t, data, quiet=args.quiet, force=args.force)
+        tailor_one(t, data, quiet=args.quiet, force=args.force,
+                   max_projects=args.max_projects)
         if not existed or args.force:
             built += 1
 
