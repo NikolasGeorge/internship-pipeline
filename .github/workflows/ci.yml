@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Every branch, not just main: the point of CI here is to find out whether a
+  # change is good before it reaches main, which means it has to run before the
+  # merge rather than after it.
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
