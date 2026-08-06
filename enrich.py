@@ -463,7 +463,7 @@ def main():
             # Workday/Ashby render client-side, so the HTML fallback sees an
             # empty shell. Nothing more to try without a browser.
             print(f"  [manual] {p.get('company_name')} — {p.get('title')}")
-            print(f"           no description via API or HTML; open in browser:")
+            print("           no description via API or HTML; open in browser:")
             print(f"           {url}")
             enriched[p.get("id")] = {"ats": ats, "status": "needs manual fetch",
                                      "url": url, "company": p.get("company_name"),
@@ -501,6 +501,36 @@ def main():
     write_digest(results)
 
 
+
+def quota_blocked():
+    """Companies whose application allowance is spent.
+
+    Some employers cap applications per recruitment cycle rather than per
+    posting -- ByteDance and TikTok share a 2-application limit across the
+    whole 2027 intern project. Surfacing 37 postings you cannot apply to is
+    worse than surfacing none, so they are moved out of the actionable list.
+    """
+    from datetime import date
+    try:
+        cfg = json.load(open(os.path.join(BASE_DIR, "config.json"), encoding="utf-8"))
+    except Exception:
+        return []
+    out = []
+    today = date.today().isoformat()
+    for rule in cfg.get("quota_exhausted", []):
+        if rule.get("until") and rule["until"] < today:
+            continue          # window has passed; the cap no longer applies
+        out.append(rule)
+    return out
+
+
+def quota_rule_for(company):
+    for rule in quota_blocked():
+        if any(m.lower() in (company or "").lower() for m in rule.get("match", [])):
+            return rule
+    return None
+
+
 def write_digest(_unused=None):
     """A single file that answers 'what should I do next' without opening every
     brief. Built from enriched.json rather than one run's results, so it shows
@@ -521,12 +551,16 @@ def write_digest(_unused=None):
         applied = {}
     applied_briefs = {v.get("brief") for v in applied.values()}
 
-    rows, done = [], []
+    rows, done, blocked = [], [], []
     for v in enr.values():
         if v.get("status") != "ok" or not v.get("brief"):
             continue
         if v["brief"] in applied_briefs:
             done.append(v)
+            continue
+        rule = quota_rule_for(v.get("company"))
+        if rule:
+            blocked.append((v, rule))
             continue
         rows.append((v.get("verdict", "REVIEW"), v.get("company"), v.get("title"),
                      os.path.join(BRIEFS_DIR, v["brief"])))
@@ -542,6 +576,16 @@ def write_digest(_unused=None):
          f"{sum(1 for r in rows if r[0]=='SKIP')} to skip · "
          f"**{len(done)} already submitted**",
          ""]
+    if blocked:
+        by_rule = {}
+        for v, rule in blocked:
+            by_rule.setdefault(rule["note"], []).append(v)
+        for note, items in by_rule.items():
+            L += [f"<details><summary>{len(items)} hidden — application quota reached</summary>",
+                  "", f"_{note}_", ""]
+            for v in sorted(items, key=lambda x: (x.get("company") or "")):
+                L.append(f"- {v.get('company')} — {v.get('title')}")
+            L += ["", "</details>", ""]
     if done:
         L += ["<details><summary>Already submitted — not shown below</summary>", ""]
         for v in sorted(done, key=lambda x: (x.get("company") or "")):

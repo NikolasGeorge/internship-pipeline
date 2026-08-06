@@ -23,3 +23,15 @@
 # --- templates (copy these, then fill them in) ---
 !config.example.json
 !resume_data.example.json
+
+# --- tests and CI ---
+# The directory entries come first: `*` above excludes directories too, and
+# git will not descend into an excluded directory to find un-ignored files.
+!tests/
+!tests/*.py
+!pytest.ini
+!ruff.toml
+!requirements-dev.txt
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  # Every branch, not just main: the point of CI here is to find out whether a
+  # change is good before it reaches main, which means it has to run before the
+  # merge rather than after it.
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The pipeline runs on Windows via Task Scheduler; Ubuntu is here to
+        # catch the path and encoding assumptions that only Windows hides.
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          # pip caching only looks for requirements.txt or pyproject.toml by
+          # default, and this repo has neither -- the runtime is stdlib-only,
+          # so the sole dependency file is a dev one. Without this the whole
+          # matrix fails at setup rather than at anything real.
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install linters
+        run: python -m pip install ruff
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Byte-compile every module
+        run: python -m compileall -q watch.py enrich.py tailor.py applied.py open_apps.py

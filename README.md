@@ -1,5 +1,7 @@
 # Internship Pipeline
 
+[![CI](https://github.com/NikolasGeorge/internship-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/NikolasGeorge/internship-pipeline/actions/workflows/ci.yml)
+
 Automated tooling for a software internship search. It finds postings, fetches
 the **real job description** from each company's applicant tracking system,
 screens them against hard disqualifiers, and generates a resume tailored to
@@ -121,6 +123,33 @@ py applied.py --pending     # what's left
 
 Schedule `run_watch.bat` (Windows Task Scheduler) or the equivalent cron entry
 to run the first four automatically.
+
+---
+
+## Tests
+
+```bash
+py -m pip install -r requirements-dev.txt
+py -m pytest
+```
+
+136 tests, no network access and no fixtures on disk — every test builds its
+own input. What they cover:
+
+| Area | Why it's tested |
+|---|---|
+| `matches_location` | The state-code filter has to match `", ca"` in *Norco, CA* but not in *Toronto, Canada*. A silent false negative here drops real postings and nothing reports it. |
+| `score_posting` | Each bonus is asserted in isolation and in combination, so a weight change shows up as a specific failing test rather than a shifted ranking nobody notices. |
+| `strip_html` | Greenhouse returns entity-escaped markup and Workday double-encodes. The unescape order is load-bearing and not obvious from reading it. |
+| `screen` | *"Must be able to obtain a clearance"* must **not** be treated the same as *"must hold an active clearance"* — the first is worth applying to and the second isn't. |
+| `screen_questions` | Gating conditions that live in the application form rather than the description. |
+| `req_id` | Three postings can share a company and title; if the id collides, two briefs overwrite the third. |
+| quota rules | A shared application cap has to block every company covered by the rule and stop blocking once the window expires. |
+| `order_projects` / `order_skills` | Reordering must be deterministic, must break ties in the original order, and must never lose or duplicate an entry. |
+| `build_docx` | Asserts the core guarantee: every word in the generated resume traces back to `resume_data.json` or is a section label the template emits. Nothing is invented. |
+
+CI runs the suite on Ubuntu and Windows across Python 3.10–3.13, plus `ruff`
+and a byte-compile of every module.
 
 ---
 
