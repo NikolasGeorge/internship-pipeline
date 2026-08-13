@@ -16,6 +16,13 @@
 !applied.py
 !open_apps.py
 !run_watch.bat
+!sort_applied.py
+!check_resumes.py
+
+# --- document export (Windows-only: these drive Word via COM) ---
+!export_pdf.ps1
+!make_web_assets.py
+!make_resume_html.py
 
 # --- reference data ---
 !faang_plus.json
