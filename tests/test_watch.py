@@ -45,6 +45,22 @@ class TestMatchesLocation:
     def test_no_match_is_rejected(self):
         assert watch.matches_location({"locations": ["Berlin"]}, [", ca"]) is False
 
+    def test_bare_city_abbreviations_match(self):
+        # The upstream feed writes "NYC" and "SF" with no state code, so the
+        # state-code branch never fires on them. Roughly 1,350 location entries
+        # use these two strings; without plain entries they are all dropped.
+        assert watch.matches_location({"locations": ["NYC"]}, ["nyc"]) is True
+        assert watch.matches_location({"locations": ["SF"]}, ["sf"]) is True
+        assert watch.matches_location({"locations": ["South SF"]}, ["sf"]) is True
+
+    def test_state_codes_alone_miss_bare_city_abbreviations(self):
+        # Regression guard: this is the bug. A US config listing every state
+        # code still drops NYC and SF, because neither carries one.
+        assert watch.matches_location(
+            {"locations": ["NYC"]}, [", ny", ", ca"]) is False
+        assert watch.matches_location(
+            {"locations": ["SF"]}, [", ny", ", ca"]) is False
+
 
 # ---------------------------------------------------------------- matches_title
 class TestMatchesTitle:
