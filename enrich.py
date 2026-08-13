@@ -81,14 +81,69 @@ CLOSED_MARKERS = re.compile(
 
 # --------------------------------------------------------------------- skills
 SKILL_TERMS = [
+    # Languages
     "python", "java", "c++", "c#", "javascript", "typescript", "sql", "rust",
-    "assembly", "unity", ".net", "opengl", "git", "github", "gitlab", "agile",
-    "scrum", "rest", "api", "linux", "unix", "docker", "kubernetes", "jenkins",
-    "maven", "ci/cd", "devops", "devsecops", "unit test", "automated test",
-    "regression", "machine learning", "ml", "data pipeline", "embedded",
-    "arduino", "sensor", "real-time", "distributed", "react", "node",
-    "angular", "vue", "mongodb", "matlab", "security", "owasp", "sdlc", "uml",
+    "assembly", "golang", "scala", "kotlin", "ruby", "php", "swift",
+    "perl", "bash", "powershell", "matlab",
+    # Frameworks / runtimes
+    "unity", ".net", "asp.net", "opengl", "unreal", "react", "node", "angular",
+    "vue", "django", "flask", "fastapi", "spring boot",
+    # Cloud and infra
+    "aws", "azure", "gcp", "google cloud", "cloud platform", "s3", "lambda",
+    "ec2", "terraform", "ansible", "docker", "kubernetes", "container",
+    "microservice", "serverless", "linux", "unix", "windows server",
+    # Data
+    "sql server", "postgres", "postgresql", "mysql", "oracle", "mongodb",
+    "redis", "kafka", "spark", "hadoop", "snowflake", "databricks", "etl",
+    "data pipeline", "data warehouse", "data modeling", "airflow",
+    # Practice / process
+    "git", "github", "gitlab", "bitbucket", "agile", "scrum", "kanban",
+    "jira", "ci/cd", "continuous integration", "continuous delivery",
+    "devops", "devsecops", "jenkins", "maven", "gradle", "code review",
+    "sdlc", "uml", "design pattern", "object-oriented",
+    # Testing
+    "unit test", "integration test", "automated test", "regression",
+    "test automation", "tdd", "pytest", "junit", "selenium", "qa",
+    # Systems
+    "rest", "restful", "api", "graphql", "grpc", "websocket", "tcp", "udp",
+    "http", "real-time", "distributed", "distributed systems", "concurrency",
+    "multithread", "latency", "scalability", "high availability",
+    "fault tolerant", "observability", "monitoring", "telemetry", "logging",
+    "performance", "optimization", "caching", "load balancing",
+    # ML / AI
+    "machine learning", "ml", "artificial intelligence", "deep learning",
+    "tensorflow", "pytorch", "scikit", "scikit-learn", "pandas", "numpy",
+    "nlp", "llm", "large language model", "rag", "prompt engineering",
+    "data science", "model evaluation",
+    # Security
+    "security", "cybersecurity", "owasp", "authentication", "authorization",
+    "encryption", "cryptography", "penetration test", "threat model",
+    "secure coding", "vulnerability", "iam", "rbac", "zero trust",
+    # Embedded / other
+    "embedded", "arduino", "sensor", "firmware", "rtos", "fpga", "verilog",
 ]
+
+
+def _term_regex(term):
+    """Word-boundary pattern for a skill term.
+
+    Substring matching does not survive a vocabulary this size: "ml" matched
+    "html", "r " matched every "for ". Boundaries are only applied where the
+    term actually starts or ends with a word character, so "c++", ".net" and
+    "ci/cd" still match.
+    """
+    esc = re.escape(term)
+    left = r"\b" if term[0].isalnum() else ""
+    right = r"\b" if term[-1].isalnum() else ""
+    return re.compile(left + esc + right, re.I)
+
+
+TERM_RE = {t: _term_regex(t) for t in SKILL_TERMS}
+
+
+def terms_in(text):
+    """Every skill term appearing in text, matched on word boundaries."""
+    return {t for t in SKILL_TERMS if TERM_RE[t].search(text)}
 
 
 def http_json(url, timeout=25):
@@ -257,7 +312,7 @@ def load_resume_skills():
     if not os.path.exists(RESUME_PATH):
         return set()
     text = open(RESUME_PATH, encoding="utf-8").read().lower()
-    return {s for s in SKILL_TERMS if s in text}
+    return terms_in(text)
 
 
 def screen(desc):
@@ -306,6 +361,80 @@ QUESTION_GATES = [
 ]
 
 
+# Instructions a posting gives about the RESUME ITSELF, as opposed to what it
+# wants the candidate to know. These are pass/fail gates applied before anyone
+# evaluates a candidate, and they cost almost nothing to satisfy -- so missing
+# one throws away an application for no reason.
+#
+# This list exists because a TikTok posting said "please clearly state your
+# availability in your resume, including your start and end dates", the resume
+# said nothing about availability, and it was declined in about a day.
+RESUME_INSTRUCTIONS = [
+    (
+        "state_availability",
+        r"(state your availability|availability[^.]{0,40}start and end date|"
+        r"include your (?:start|available) date|indicate your availability)",
+        "Put an availability line on the resume, e.g. 'Available May - August 2027'.",
+    ),
+    (
+        "redact_age_or_dates",
+        r"(redact or remove any information that identifies your age|"
+        r"remove[^.]{0,60}date of birth|"
+        r"dates of attendance at or graduation)",
+        "Rebuild with `tailor.py --no-education-dates` so graduation and "
+        "attendance dates are omitted.",
+    ),
+    (
+        "cover_letter_required",
+        r"(cover letter is required|must (?:submit|include) a cover letter|"
+        r"submit a[^.]{0,20}cover letter)",
+        "A cover letter is required, not optional. Write one before applying.",
+    ),
+    (
+        "reference_letters",
+        r"(reference letters?|letters? of recommendation)[^.]{0,60}"
+        r"(required|submit|minimum)",
+        "Reference letters are required. Alert the writers before submitting -- "
+        "requests usually go out only after the application lands.",
+    ),
+    (
+        "include_linkedin",
+        r"(linkedin (?:profile )?(?:link|url)|include[^.]{0,30}linkedin|"
+        r"make sure you have[^.]{0,40}linkedin)",
+        "The posting wants a LinkedIn URL on the resume. Add it to "
+        "resume_data.json under contact.linkedin, then rebuild.",
+    ),
+    (
+        "include_gpa",
+        r"(include your gpa|gpa must be (?:listed|included)|resume[^.]{0,30}gpa)",
+        "The posting wants GPA on the resume. It is already there (3.83).",
+    ),
+    (
+        "work_samples",
+        r"(work samples|portfolio[^.]{0,30}required|code samples?)[^.]{0,40}"
+        r"(submit|required|include)",
+        "Work or code samples are expected. Link the public repos.",
+    ),
+    (
+        "pdf_only",
+        r"(resume must be[^.]{0,20}pdf|submit[^.]{0,20}resume[^.]{0,20}in pdf|"
+        r"pdf format only)",
+        "Export the .docx to PDF before uploading.",
+    ),
+]
+
+
+def resume_instructions(desc):
+    """Explicit instructions the posting gives about the resume itself."""
+    found = []
+    for name, pattern, todo in RESUME_INSTRUCTIONS:
+        m = re.search(pattern, desc, re.I)
+        if m:
+            quote = re.sub(r"\s+", " ", m.group(0)).strip()[:120]
+            found.append((name, todo, quote))
+    return found
+
+
 def screen_questions(questions):
     """Flag gating conditions that live in the FORM rather than the description."""
     flags = []
@@ -318,8 +447,7 @@ def screen_questions(questions):
 
 
 def match_skills(desc, resume_skills):
-    low = desc.lower()
-    wanted = {s for s in SKILL_TERMS if s in low}
+    wanted = terms_in(desc.lower())
     return sorted(wanted & resume_skills), sorted(wanted - resume_skills)
 
 
@@ -367,6 +495,17 @@ def write_brief(p, data, dq, warn, have, missing):
         for n, why in warn:
             L.append(f"- **{n}** — {why}")
         L.append("")
+    # Placed above the keyword lists on purpose: these are pass/fail gates,
+    # and burying them under keyword tables is how one got missed.
+    instr = resume_instructions(data.get("description", "") or "")
+    if instr:
+        L.append("## What this posting explicitly asks for — DO THIS")
+        L.append("")
+        for n, todo, quote in instr:
+            L.append(f"- **{n}** — {todo}")
+            L.append(f'  > "{quote}"')
+        L.append("")
+
     L.append("## Requirement keywords you already have")
     L.append("")
     L.append(", ".join(have) if have else "_none detected_")
