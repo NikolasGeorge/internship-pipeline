@@ -53,7 +53,13 @@ def brief_apply_urls():
     for b in glob.glob(os.path.join(BASE, "briefs", "*.md")):
         head = open(b, encoding="utf-8", errors="replace").read(2000)
         m = re.search(r"^\*\*Apply:\*\*\s*(\S+)", head, re.M)
-        out[os.path.splitext(os.path.basename(b))[0]] = norm(m.group(1)) if m else ""
+        u = norm(m.group(1)) if m else ""
+        # Briefs that are not real postings (the general resume) record "n/a"
+        # here. Left as-is it is a short truthy string, and the substring test
+        # below matches it inside any URL that happens to contain "n/a".
+        if u in ("", "n/a", "none", "-"):
+            u = ""
+        out[os.path.splitext(os.path.basename(b))[0]] = u
     return out
 
 
@@ -73,7 +79,8 @@ def resume_files():
 def find(row, briefs, files):
     url, comp = norm(row["Job URL"]), slug(row["Company Name"])
     for stem, burl in briefs.items():
-        if burl and (burl == url or (len(url) > 30 and (url in burl or burl in url))):
+        if burl and len(burl) > 20 and (
+                burl == url or (len(url) > 30 and (url in burl or burl in url))):
             if stem in files:
                 return stem, "url"
     ids = req_ids(row["Job URL"])
