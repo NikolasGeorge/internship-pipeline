@@ -306,6 +306,15 @@ def build_docx(data, projects, skills, out_path, max_projects=None):
             if a.get("date"):
                 q.add_run("	" + a["date"]).font.size = Pt(9)
 
+    # Interests sit beside Affiliations for the same reason: worth a line, not
+    # a heading. Off by default and opted into per posting, because a game rank
+    # reads as engagement at a studio and as noise everywhere else.
+    if data.get("interests"):
+        q = doc.add_paragraph()
+        q.paragraph_format.space_after = Pt(0)
+        q.add_run("Interests: ").bold = True
+        q.add_run(", ".join(data["interests"])).font.size = Pt(9)
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     doc.save(out_path)
     return out_path
@@ -401,8 +410,37 @@ def pick_projects(data, patterns):
     return chosen
 
 
+def strip_coursework(data):
+    """Return a copy with the coursework and in-progress lines removed.
+
+    Some recruiters say plainly that they do not read coursework on a resume:
+    it is assumed from the degree, and it costs two lines that a project bullet
+    would use better. Blizzard's Early Careers team says exactly this. Kept as
+    a flag rather than a deletion because plenty of other employers do want it,
+    especially where a specific course maps to the req.
+    """
+    out = copy.deepcopy(data)
+    for e in out.get("education", []):
+        e.pop("coursework", None)
+        e.pop("in_progress", None)
+    return out
+
+
+def strip_interests(data):
+    """Return a copy with the interests line removed.
+
+    Interests are opt-in rather than opt-out. A competitive rank in a studio's
+    own game is real evidence of engagement to that studio, and clutter to a
+    defense contractor or a cloud infrastructure team.
+    """
+    out = copy.deepcopy(data)
+    out.pop("interests", None)
+    return out
+
+
 def tailor_one(brief_path, data, quiet=False, force=False, max_projects=None,
                no_education_dates=False, no_dates=False, no_availability=False,
+               no_coursework=False, interests=False,
                projects_order=None, omit=None):
     stem = os.path.splitext(os.path.basename(brief_path))[0]
     out = os.path.join(OUT_DIR, f"{resume_prefix()}_{stem}.docx")
@@ -420,6 +458,10 @@ def tailor_one(brief_path, data, quiet=False, force=False, max_projects=None,
         data = strip_all_dates(data)
     elif no_education_dates:
         data = strip_education_dates(data)
+    if not interests:
+        data = strip_interests(data)
+    if no_coursework:
+        data = strip_coursework(data)
     if no_availability:
         data = strip_availability(data)
     if omit:
@@ -520,6 +562,12 @@ def main():
     ap.add_argument("--no-education-dates", action="store_true",
                     help="omit graduation/attendance dates -- some employers "
                          "ask US applicants to redact these as age proxies")
+    ap.add_argument("--interests", action="store_true",
+                    help="include the interests line (e.g. a competitive rank) "
+                         "-- relevant at a game studio, noise elsewhere")
+    ap.add_argument("--no-coursework", action="store_true",
+                    help="omit the coursework and in-progress lines -- some "
+                         "recruiters say outright they do not read them")
     ap.add_argument("--no-availability", action="store_true",
                     help="omit the availability line from the contact block")
     ap.add_argument("--no-dates", action="store_true",
@@ -576,6 +624,8 @@ def main():
                    no_education_dates=args.no_education_dates,
                    no_dates=args.no_dates,
                    no_availability=args.no_availability,
+                   no_coursework=args.no_coursework,
+                   interests=args.interests,
                    projects_order=(args.projects.split(",")
                                    if args.projects else None),
                    omit=(args.omit_contact.split(",")

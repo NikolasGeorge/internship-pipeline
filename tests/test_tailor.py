@@ -241,3 +241,40 @@ class TestGeneratedResumeInventsNothing:
         text = self._text(self._build(tmp_path, resume_data, max_projects=1))
         assert "Firstproject" in text
         assert "Secondproject" not in text
+
+
+# ------------------------------------------------------ optional resume lines
+class TestOptionalLines:
+    def test_strip_coursework_removes_both_course_lines(self, resume_data):
+        resume_data["education"][0]["in_progress"] = "Compilers"
+        out = tailor.strip_coursework(resume_data)
+        assert "coursework" not in out["education"][0]
+        assert "in_progress" not in out["education"][0]
+
+    def test_strip_coursework_leaves_the_input_untouched(self, resume_data):
+        tailor.strip_coursework(resume_data)
+        assert resume_data["education"][0]["coursework"] == "Algorithms, Databases"
+
+    def test_strip_interests_removes_the_line(self, resume_data):
+        resume_data["interests"] = ["Chess"]
+        assert "interests" not in tailor.strip_interests(resume_data)
+
+    def test_strip_interests_is_a_no_op_without_interests(self, resume_data):
+        assert tailor.strip_interests(resume_data) == resume_data
+
+    def test_interests_are_off_unless_asked_for(self, resume_data, brief,
+                                                tmp_path, monkeypatch):
+        resume_data["interests"] = ["Chess"]
+        monkeypatch.setattr(tailor, "OUT_DIR", str(tmp_path))
+        out = tailor.tailor_one(brief(), resume_data, quiet=True, force=True)
+        text = "\n".join(p.text for p in tailor.Document(out).paragraphs)
+        assert "Interests" not in text
+
+    def test_interests_appear_when_opted_in(self, resume_data, brief,
+                                            tmp_path, monkeypatch):
+        resume_data["interests"] = ["Chess"]
+        monkeypatch.setattr(tailor, "OUT_DIR", str(tmp_path))
+        out = tailor.tailor_one(brief(), resume_data, quiet=True, force=True,
+                                interests=True)
+        text = "\n".join(p.text for p in tailor.Document(out).paragraphs)
+        assert "Interests: Chess" in text
