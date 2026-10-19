@@ -129,12 +129,40 @@ def order_projects(data, desc):
     return [p for _, _, p in scored], {id(p): s for s, _, p in scored}
 
 
+def _mentions(skill, desc):
+    """Whether the posting names a skill as a whole token.
+
+    A bare substring test treats "c" as present in nearly every posting, and
+    would let "c" match inside "c++" or "c#". Language names end in symbols, so
+    \\b is no use here; the lookarounds reject neighbouring letters, digits and
+    the + and # that turn C into a different language.
+    """
+    key = re.escape(skill.lower().split("/")[0])
+    return re.search(r"(?<![\w+#])" + key + r"(?![\w+#])", desc) is not None
+
+
 def order_skills(data, desc):
     out = {}
     for group, items in data["skills"].items():
-        hit = [s for s in items if s.lower().split("/")[0] in desc]
+        hit = [s for s in items if _mentions(s, desc)]
         rest = [s for s in items if s not in hit]
         out[group] = hit + rest
+    return out
+
+
+def lead_skills(skills, names):
+    """Move named skills to the front of their group, in the order given.
+
+    Posting-driven ordering only knows which skills a posting mentions, not
+    which one the studio weighs most. Game studios list "Java, C++, C#" as
+    interchangeable examples and then run C++ assessments, so the language
+    that leads has to be a choice made per posting rather than inferred.
+    """
+    want = [n.strip().lower() for n in names if n.strip()]
+    out = {}
+    for group, items in skills.items():
+        first = [s for w in want for s in items if s.lower() == w]
+        out[group] = first + [s for s in items if s not in first]
     return out
 
 
@@ -367,6 +395,39 @@ def omit_contact(data, fields):
     return out
 
 
+def omit_skills(data, names):
+    """Return a copy with named skills removed, matched case-insensitively.
+
+    The skills line is one list for every posting, and some entries help in
+    one place and hurt in another. AI coding tools read as current at a cloud
+    company and as a question mark at a game studio; OWASP Dependency-Check
+    matters to a security team and to nobody shipping gameplay. Exact names,
+    not substrings: "Git" must not take "GitHub" with it.
+    """
+    drop = {n.strip().lower() for n in names if n.strip()}
+    out = copy.deepcopy(data)
+    for group, items in out.get("skills", {}).items():
+        out["skills"][group] = [s for s in items if s.lower() not in drop]
+    return out
+
+
+def omit_bullets(data, patterns):
+    """Return a copy with experience and project bullets removed by substring.
+
+    Some bullets earn their line for one kind of employer only. The NAVSEA
+    clearance bullet is the lead for a defense contractor and filler for a game
+    studio, where the line is better spent on a project. Substring matching,
+    because bullets are sentences and nobody should have to retype one.
+    """
+    pats = [p.strip().lower() for p in patterns if p.strip()]
+    out = copy.deepcopy(data)
+    for section in ("experience", "projects"):
+        for item in out.get(section, []):
+            item["bullets"] = [b for b in item["bullets"]
+                               if not any(p in b["text"].lower() for p in pats)]
+    return out
+
+
 def strip_availability(data):
     """Return a copy with the availability line removed.
 
@@ -441,7 +502,8 @@ def strip_interests(data):
 def tailor_one(brief_path, data, quiet=False, force=False, max_projects=None,
                no_education_dates=False, no_dates=False, no_availability=False,
                no_coursework=False, interests=False,
-               projects_order=None, omit=None):
+               projects_order=None, omit=None, skip_skills=None,
+               skip_bullets=None, lead=None):
     stem = os.path.splitext(os.path.basename(brief_path))[0]
     out = os.path.join(OUT_DIR, f"{resume_prefix()}_{stem}.docx")
 
@@ -466,10 +528,16 @@ def tailor_one(brief_path, data, quiet=False, force=False, max_projects=None,
         data = strip_availability(data)
     if omit:
         data = omit_contact(data, omit)
+    if skip_skills:
+        data = omit_skills(data, skip_skills)
+    if skip_bullets:
+        data = omit_bullets(data, skip_bullets)
     projects, scores = order_projects(data, desc)
     if projects_order:
         projects = pick_projects(data, projects_order)
     skills = order_skills(data, desc)
+    if lead:
+        skills = lead_skills(skills, lead)
     try:
         # A second page on an intern resume is a cost, not a bonus: recruiters
         # skim page one. Five projects overflow, so cap the list and let the
@@ -559,6 +627,15 @@ def main():
     ap.add_argument("--omit-contact", metavar="FIELDS",
                     help="comma-separated contact fields to leave off "
                          "(e.g. --omit-contact phone for a public web copy)")
+    ap.add_argument("--omit-skills", metavar="NAMES",
+                    help="comma-separated skills to leave off, exact names "
+                         "(e.g. --omit-skills \"OWASP Dependency-Check,UML\")")
+    ap.add_argument("--lead-skills", metavar="NAMES",
+                    help="comma-separated skills to put first in their group, "
+                         "exact names (e.g. --lead-skills \"C/C++,C#\")")
+    ap.add_argument("--omit-bullets", metavar="TEXT",
+                    help="comma-separated substrings; experience and project "
+                         "bullets containing any of them are left off")
     ap.add_argument("--no-education-dates", action="store_true",
                     help="omit graduation/attendance dates -- some employers "
                          "ask US applicants to redact these as age proxies")
@@ -629,7 +706,13 @@ def main():
                    projects_order=(args.projects.split(",")
                                    if args.projects else None),
                    omit=(args.omit_contact.split(",")
-                         if args.omit_contact else None))
+                         if args.omit_contact else None),
+                   skip_skills=(args.omit_skills.split(",")
+                                if args.omit_skills else None),
+                   skip_bullets=(args.omit_bullets.split(",")
+                                 if args.omit_bullets else None),
+                   lead=(args.lead_skills.split(",")
+                         if args.lead_skills else None))
         if not existed or args.force:
             built += 1
 

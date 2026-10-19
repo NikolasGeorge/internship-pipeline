@@ -278,3 +278,49 @@ class TestOptionalLines:
                                 interests=True)
         text = "\n".join(p.text for p in tailor.Document(out).paragraphs)
         assert "Interests: Chess" in text
+
+
+# ------------------------------------------------------ per-posting omissions
+class TestOmissions:
+    def test_omit_skills_drops_named_skills_case_insensitively(self, resume_data):
+        out = tailor.omit_skills(resume_data, ["unity", "Rust"])
+        assert out["skills"]["tools"] == ["Git"]
+        assert out["skills"]["familiar"] == []
+
+    def test_omit_skills_matches_exact_names_not_substrings(self, resume_data):
+        resume_data["skills"]["tools"] = ["Git", "GitHub"]
+        out = tailor.omit_skills(resume_data, ["Git"])
+        assert out["skills"]["tools"] == ["GitHub"]
+
+    def test_omit_skills_leaves_the_input_untouched(self, resume_data):
+        tailor.omit_skills(resume_data, ["Unity"])
+        assert "Unity" in resume_data["skills"]["tools"]
+
+    def test_omit_bullets_drops_matching_experience_and_project_bullets(
+            self, resume_data):
+        out = tailor.omit_bullets(resume_data, ["WROTE", "built a"])
+        assert out["experience"][0]["bullets"] == []
+        assert out["projects"][0]["bullets"] == []
+
+    def test_omit_bullets_keeps_bullets_that_do_not_match(self, resume_data):
+        out = tailor.omit_bullets(resume_data, ["nothing like this"])
+        assert out["experience"] == resume_data["experience"]
+        assert out["projects"] == resume_data["projects"]
+
+    def test_lead_skills_moves_named_skills_to_the_front_in_order(
+            self, resume_data):
+        out = tailor.lead_skills(resume_data["skills"], ["c/c++", "Java"])
+        assert out["languages"] == ["C/C++", "Java", "Python"]
+
+    def test_lead_skills_ignores_names_not_in_a_group(self, resume_data):
+        out = tailor.lead_skills(resume_data["skills"], ["Haskell"])
+        assert out == resume_data["skills"]
+
+    def test_omitted_skill_is_absent_from_the_built_resume(
+            self, resume_data, brief, tmp_path, monkeypatch):
+        monkeypatch.setattr(tailor, "OUT_DIR", str(tmp_path))
+        out = tailor.tailor_one(brief(), resume_data, quiet=True, force=True,
+                                skip_skills=["Unity"])
+        text = "\n".join(p.text for p in tailor.Document(out).paragraphs)
+        assert "Unity" not in text
+        assert "Git" in text
