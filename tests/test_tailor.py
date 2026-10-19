@@ -138,6 +138,27 @@ class TestOrderSkills:
         out = tailor.order_skills(resume_data, "nothing relevant")
         assert out["languages"] == ["Python", "Java", "C/C++"]
 
+    def test_bare_c_does_not_match_inside_other_words(self, resume_data):
+        # "c" as a substring appears in almost every posting, which used to
+        # promote C/C++ regardless of whether the posting asked for it.
+        out = tailor.order_skills(resume_data, "we build scalable services")
+        assert out["languages"][0] != "C/C++"
+
+    def test_bare_c_does_not_match_cplusplus_or_csharp(self, resume_data):
+        resume_data["skills"]["languages"] = ["C", "Python"]
+        out = tailor.order_skills(resume_data, "strong c++ and c# experience")
+        assert out["languages"] == ["C", "Python"]
+
+    def test_c_matches_when_named_on_its_own(self, resume_data):
+        resume_data["skills"]["languages"] = ["Python", "C"]
+        out = tailor.order_skills(resume_data, "embedded work in c and asm")
+        assert out["languages"][0] == "C"
+
+    def test_a_skill_is_not_matched_inside_a_longer_word(self, resume_data):
+        resume_data["skills"]["languages"] = ["Python", "Java"]
+        out = tailor.order_skills(resume_data, "we use javascript everywhere")
+        assert out["languages"] == ["Python", "Java"]
+
     def test_no_skill_is_lost_or_duplicated(self, resume_data):
         out = tailor.order_skills(resume_data, "java git")
         for group, items in resume_data["skills"].items():
